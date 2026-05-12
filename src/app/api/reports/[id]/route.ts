@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { StoredReport } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+
 
 const mapReport = (report: NonNullable<Awaited<ReturnType<typeof prisma.report.findUnique>>>): StoredReport => ({
   id: report.id,

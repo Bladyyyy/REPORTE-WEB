@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { calculateReport, todayISO } from "@/lib/report-model";
 import type { ReportPayload, StoredReport } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+
 
 const toStoredReport = (report: {
   id: string;

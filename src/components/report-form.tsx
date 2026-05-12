@@ -26,6 +26,18 @@ type CellProps = {
   style?: React.CSSProperties;
 };
 
+const LOCAL_USERS_KEY = "hospital-mujer-static-users";
+
+const readLocalUsers = (): ReportUser[] => {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(LOCAL_USERS_KEY);
+  return raw ? (JSON.parse(raw) as ReportUser[]) : [];
+};
+
+const writeLocalUsers = (users: ReportUser[]) => {
+  window.localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+};
+
 function Cell({ children, className, style }: CellProps) {
   return (
     <div className={cn("excel-cell", className)} style={style}>
@@ -100,8 +112,13 @@ export function ReportForm({ captureRef, onCapture, onSave, onPdf, onExcel, savi
   const [userForm, setUserForm] = useState({ firstName: "", lastName: "", role: "", degree: "Lic." });
 
   const refreshUsers = async () => {
-    const response = await fetch("/api/users", { cache: "no-store" });
-    setUsers((await response.json()) as ReportUser[]);
+    try {
+      const response = await fetch("/api/users", { cache: "no-store" });
+      if (!response.ok) throw new Error("API no disponible");
+      setUsers((await response.json()) as ReportUser[]);
+    } catch {
+      setUsers(readLocalUsers());
+    }
   };
 
   useEffect(() => {
@@ -131,25 +148,49 @@ export function ReportForm({ captureRef, onCapture, onSave, onPdf, onExcel, savi
   const saveUser = async () => {
     const method = editingId ? "PUT" : "POST";
     const url = editingId ? `/api/users/${editingId}` : "/api/users";
-    const response = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(userForm)
-    });
+    let saved: ReportUser;
 
-    if (!response.ok) return;
-    const saved = (await response.json()) as ReportUser;
-    await refreshUsers();
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userForm)
+      });
+
+      if (!response.ok) throw new Error("API no disponible");
+      saved = (await response.json()) as ReportUser;
+      await refreshUsers();
+    } catch {
+      const now = new Date().toISOString();
+      saved = {
+        id: editingId ?? `local-user-${Date.now()}`,
+        ...userForm,
+        createdAt: now,
+        updatedAt: now
+      };
+      const existing = readLocalUsers();
+      const next = editingId ? existing.map((user) => (user.id === editingId ? saved : user)) : [...existing, saved];
+      writeLocalUsers(next);
+      setUsers(next);
+    }
+
     setGeneratedBy(formatReportUser(saved));
     resetUserForm();
   };
 
   const deleteUser = async (user: ReportUser) => {
-    await fetch(`/api/users/${user.id}`, { method: "DELETE" });
+    try {
+      const response = await fetch(`/api/users/${user.id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("API no disponible");
+      await refreshUsers();
+    } catch {
+      const next = readLocalUsers().filter((item) => item.id !== user.id);
+      writeLocalUsers(next);
+      setUsers(next);
+    }
     if (generatedBy === formatReportUser(user)) {
       setGeneratedBy("");
     }
-    await refreshUsers();
   };
 
   return (

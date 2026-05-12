@@ -3,7 +3,7 @@ import { buildAnalytics } from "@/lib/analytics";
 import { prisma } from "@/lib/prisma";
 import type { StoredReport } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+
 
 export async function GET() {
   const reports = await prisma.report.findMany({

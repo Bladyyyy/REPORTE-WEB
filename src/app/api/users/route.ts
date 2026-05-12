@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import type { ReportUser } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+
 
 const toUser = (user: {
   id: string;

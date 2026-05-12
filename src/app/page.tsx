@@ -31,6 +31,18 @@ const LETTER_CANVAS = { width: 2160, height: 2790 };
 
 const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
 
+const LOCAL_REPORTS_KEY = "hospital-mujer-static-reports";
+
+const readLocalReports = (): StoredReport[] => {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(LOCAL_REPORTS_KEY);
+  return raw ? (JSON.parse(raw) as StoredReport[]) : [];
+};
+
+const writeLocalReports = (reports: StoredReport[]) => {
+  window.localStorage.setItem(LOCAL_REPORTS_KEY, JSON.stringify(reports));
+};
+
 const fitCanvasToLetter = (source: HTMLCanvasElement) => {
   const output = document.createElement("canvas");
   output.width = LETTER_CANVAS.width;
@@ -78,14 +90,24 @@ export default function Home() {
   }, [calculations, inputs, reportDate, reportTime, reports, totals]);
 
   const refreshReports = async () => {
-    const response = await fetch("/api/reports", { cache: "no-store" });
-    const data = (await response.json()) as StoredReport[];
-    setReports(data);
+    try {
+      const response = await fetch("/api/reports", { cache: "no-store" });
+      if (!response.ok) throw new Error("API no disponible");
+      const data = (await response.json()) as StoredReport[];
+      setReports(data);
+    } catch {
+      setReports(readLocalReports());
+    }
   };
 
   const refreshAnalytics = async () => {
-    const response = await fetch("/api/analytics", { cache: "no-store" });
-    setAnalytics((await response.json()) as AnalyticsSummary);
+    try {
+      const response = await fetch("/api/analytics", { cache: "no-store" });
+      if (!response.ok) throw new Error("API no disponible");
+      setAnalytics((await response.json()) as AnalyticsSummary);
+    } catch {
+      setAnalytics(buildAnalytics(readLocalReports(), new Date(`${reportDate}T12:00:00.000Z`)));
+    }
   };
 
   useEffect(() => {
@@ -162,23 +184,38 @@ export default function Home() {
     setSaving(true);
     try {
       const screenshot = captureRef.current ? fitCanvasToLetter(await makeCanvas(captureRef.current, true)).toDataURL("image/png") : undefined;
-      const response = await fetch("/api/reports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          reportDate,
-          reportTime,
-          shift: "MANANA",
-          generatedBy,
-          formData: inputs,
-          calculations,
-          totals,
-          screenshot
-        })
-      });
+      const payload = {
+        reportDate,
+        reportTime,
+        shift: "MANANA" as const,
+        generatedBy,
+        formData: inputs,
+        calculations,
+        totals,
+        screenshot
+      };
 
-      if (!response.ok) {
-        throw new Error("No se pudo guardar el reporte");
+      try {
+        const response = await fetch("/api/reports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error("No se pudo guardar el reporte");
+        }
+      } catch {
+        const createdAt = new Date().toISOString();
+        const localReport: StoredReport = {
+          ...payload,
+          id: `local-${Date.now()}`,
+          folio: `HM-LOCAL-${reportDate.replaceAll("-", "")}-${Date.now().toString(36).toUpperCase()}`,
+          reportDate: `${reportDate}T07:00:00.000Z`,
+          createdAt,
+          updatedAt: createdAt
+        };
+        writeLocalReports([localReport, ...readLocalReports()]);
       }
 
       await refreshReports();
