@@ -1,0 +1,39 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Report {
+  id           String   @id @default(cuid())
+  folio        String   @unique
+  shift        String   @default("MANANA")
+  reportDate   DateTime
+  reportTime   String
+  generatedBy  String   @default("")
+  formData     String
+  calculations String
+  totals       String
+  screenshot   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([reportDate])
+  @@index([shift])
+  @@index([createdAt])
+}
+
+model ReportUser {
+  id        String   @id @default(cuid())
+  firstName String
+  lastName  String
+  role      String
+  degree    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([lastName, firstName])
+}
